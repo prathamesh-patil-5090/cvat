@@ -16,6 +16,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- scriv-insert-here -->
 
+<a id='changelog-2.51.0'></a>
+## \[2.51.0\] - 2025-12-01
+
+### Added
+
+- Documentation for using Backblaze B2 as an S3-compatible cloud storage option in CVAT
+  (<https://github.com/cvat-ai/cvat/pull/9952>)
+
+### Changed
+
+- Relaxed video manifest creation to make use of keyframes even if seek lands earlier
+  (<https://github.com/cvat-ai/cvat/pull/9994>)
+
+### Removed
+
+- Python 3.9 support (due to Python 3.9 EOL)
+  (<https://github.com/cvat-ai/cvat/pull/10051>)
+
+### Fixed
+
+- Fixed OpenAPI schema for `retrieve_data` endpoints: marked `type` parameter as required for both tasks and jobs API
+  (<https://github.com/cvat-ai/cvat/issues/9315>)
+
+- Calculation of statistics in the job is failed when there is a track without keyframes
+  (<https://github.com/cvat-ai/cvat/pull/10050>)
+
+- Update the `updated_date` field of the Task when PATCHing `/api/tasks/<id>/data/meta`
+  (<https://github.com/cvat-ai/cvat/pull/10052>)
+
+- Incorrect retry handling of `429 TooManyRequests` error in case of data uploading via TUS protocol
+  (<https://github.com/cvat-ai/cvat/pull/10055>)
+
+- Error message is not displayed if not possible to fetch data for 3D canvas
+  (<https://github.com/cvat-ai/cvat/pull/10059>)
+
+<a id='changelog-2.50.0'></a>
+## \[2.50.0\] - 2025-11-26
+
+### Added
+
+- \[Helm\] Kvrocks PVC configuration via annotations
+  (<https://github.com/cvat-ai/cvat/pull/10021>)
+
+- Added kvrocks PVC VolumeAttributeClass support
+  (<https://github.com/cvat-ai/cvat/pull/10026>)
+
+- Added VolumeAttributesClass creation to public chart
+  (<https://github.com/cvat-ai/cvat/pull/10030>)
+
+### Changed
+
+- Change expiration date format view in 'Security' -> 'Create API Token'
+  from default ISO to DD/MM/YYYY so that it matches the dates in the token table
+  (<https://github.com/cvat-ai/cvat/pull/9975>)
+
+- Files located in the `data/tasks/<id>` directory are no longer included
+  in task backups, nor extracted from such backups when restoring. Recent
+  versions of CVAT (since v2.6.2) no longer create or use such files
+  (<https://github.com/cvat-ai/cvat/pull/10001>)
+
+- Updated Traefik to v3.6.x
+  (<https://github.com/cvat-ai/cvat/pull/10018>)
+
+### Fixed
+
+- Excessive `GET /api/users` requests on task page for each assigned job
+  (<https://github.com/cvat-ai/cvat/pull/9989>)
+
+- Actions menu can be opened twice on different resource cards: Projects, Jobs, Cloud storages, etc.
+  (<https://github.com/cvat-ai/cvat/pull/9986>)
+
+- Quality conflicts can now be displayed in the review mode of consensus replicas
+  (<https://github.com/cvat-ai/cvat/pull/10022>)
+
+- Fixed cloud storage status. Unavailable storages now return NOT_FOUND status instead of 400 Bad Request
+  (<https://github.com/cvat-ai/cvat/pull/10011>)
+
 <a id='changelog-2.49.0'></a>
 ## \[2.49.0\] - 2025-11-06
 
