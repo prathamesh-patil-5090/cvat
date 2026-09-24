@@ -8,7 +8,7 @@ import { ThunkAction, ThunkDispatch } from 'utils/redux';
 import isAbleToChangeFrame from 'utils/is-able-to-change-frame';
 import { CanvasMode as Canvas3DMode } from 'cvat-canvas3d-wrapper';
 import {
-    RectDrawingMethod, CuboidDrawingMethod, Canvas, CanvasMode as Canvas2DMode,
+    RectDrawingMethod, CuboidDrawingMethod, Canvas, CanvasMode as Canvas2DMode, CanvasHistorySource,
 } from 'cvat-canvas-wrapper';
 import {
     getCore, MLModel, JobType, Job, QualityConflict,
@@ -140,6 +140,7 @@ export enum AnnotationActionTypes {
     REMOVE_JOB_ANNOTATIONS_SUCCESS = 'REMOVE_JOB_ANNOTATIONS_SUCCESS',
     REMOVE_JOB_ANNOTATIONS_FAILED = 'REMOVE_JOB_ANNOTATIONS_FAILED',
     UPDATE_CANVAS_CONTEXT_MENU = 'UPDATE_CANVAS_CONTEXT_MENU',
+    UPDATE_CANVAS_HISTORY = 'UPDATE_CANVAS_HISTORY',
     UNDO_ACTION_FAILED = 'UNDO_ACTION_FAILED',
     REDO_ACTION_FAILED = 'REDO_ACTION_FAILED',
     CHANGE_ANNOTATIONS_FILTERS = 'CHANGE_ANNOTATIONS_FILTERS',
@@ -420,6 +421,17 @@ export function updateCanvasContextMenu(
             type,
             pointID,
         },
+    };
+}
+
+export function updateCanvasHistory(
+    source: CanvasHistorySource,
+    undoAction?: string,
+    redoAction?: string,
+): AnyAction {
+    return {
+        type: AnnotationActionTypes.UPDATE_CANVAS_HISTORY,
+        payload: { source, undoAction, redoAction },
     };
 }
 
@@ -1254,7 +1266,7 @@ async function updateObjectsLayers(
     }
 }
 
-export function updateAnnotationsAsync(statesToUpdate: ObjectState[]): ThunkAction {
+export function updateAnnotationsAsync(statesToUpdate: ObjectState[], batch = false): ThunkAction {
     return async (dispatch: ThunkDispatch): Promise<void> => {
         const { jobInstance, workspace } = receiveAnnotationsParameters();
         try {
@@ -1265,6 +1277,12 @@ export function updateAnnotationsAsync(statesToUpdate: ObjectState[]): ThunkActi
 
             const statesToSave = statesToUpdate.filter((objectState) => !objectState.isGroundTruth);
             if (!statesToSave.length) {
+                return;
+            }
+
+            if (batch) {
+                await jobInstance.annotations.saveStates(statesToSave);
+                dispatch(fetchAnnotationsAsync());
                 return;
             }
 
@@ -1877,7 +1895,7 @@ export function restoreFrameAsync(frame: number): ThunkAction {
     };
 }
 
-export function changeHideActiveObjectAsync(hide: boolean): ThunkAction {
+export function changeHideActiveObjectAsync(hide: boolean, save = true): ThunkAction {
     return async (dispatch: ThunkDispatch, getState): Promise<void> => {
         const state = getState();
         const { instance: canvas } = state.annotation.canvas;
@@ -1887,7 +1905,7 @@ export function changeHideActiveObjectAsync(hide: boolean): ThunkAction {
             });
 
             const { objectState } = state.annotation.editing;
-            if (objectState) {
+            if (objectState && save) {
                 objectState.hidden = hide;
                 await dispatch(updateAnnotationsAsync([objectState]));
             }

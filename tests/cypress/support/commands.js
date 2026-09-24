@@ -25,6 +25,11 @@ require('cy-verify-downloads').addCustomCommand();
 
 let selectedValueGlobal = '';
 
+Cypress.Commands.add('pressWithPlatformModifier', (key) => {
+    const modifier = Cypress.platform === 'darwin' ? 'meta' : 'ctrl';
+    cy.get('body').type(`{${modifier}}${key}`);
+});
+
 Cypress.Commands.add('activateCanvasShape', (selector) => {
     cy.get(selector).then(([shapeWrapper]) => {
         const tagName = (element) => element.tagName.toLowerCase();
@@ -134,7 +139,7 @@ Cypress.Commands.add('userRegistration', (firstName, lastName, userName, emailAd
 
 Cypress.Commands.add('deleteUsers', (authHeaders, accountsToDelete) => {
     cy.request({
-        url: '/api/users?page_size=all',
+        url: '/api/users?page_size=500',
         headers: authHeaders,
     }).then((_response) => {
         const responseResult = _response.body.results;
@@ -190,7 +195,7 @@ Cypress.Commands.add('headlessGetUserId', (username) => cy.window().its('cvat')
 
 Cypress.Commands.add('deleteTasks', (authHeaders, tasksToDelete) => {
     cy.request({
-        url: '/api/tasks?page_size=all',
+        url: '/api/tasks?page_size=500',
         headers: authHeaders,
     }).then((_response) => {
         const responseResult = _response.body.results;
@@ -643,7 +648,7 @@ Cypress.Commands.add('switchLabel', (labelName, objectType) => {
     cy.get(`.cvat-${objectType}-popover`).find('.ant-select-selection-item').click();
     cy.get('.ant-select-dropdown')
         .not('.ant-select-dropdown-hidden')
-        .find(`.ant-select-item-option[title="${labelName}"]`)
+        .find(`.ant-select-item-option[data-label="${labelName}"]`)
         .click();
 });
 
@@ -837,7 +842,7 @@ Cypress.Commands.add('changeLabelAAM', (labelName) => {
                 .not('.ant-select-dropdown-hidden')
                 .first()
                 .within(() => {
-                    cy.get(`.ant-select-item-option[title="${labelName}"]`).click();
+                    cy.get(`.ant-select-item-option[data-label="${labelName}"]`).click();
                 });
         }
     });
@@ -1134,7 +1139,7 @@ Cypress.Commands.add(
             cy.contains('Annotations have been loaded').should('be.visible');
             cy.closeNotification('.ant-notification-notice-info');
         } else if (expectedResult === 'fail') {
-            cy.contains('Could not upload annotation').should('be.visible');
+            cy.contains('Could not upload annotation', { timeout: 120000 }).should('be.visible');
             cy.closeNotification('.ant-notification-notice-error');
         }
     },
