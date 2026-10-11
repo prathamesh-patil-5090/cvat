@@ -91,6 +91,40 @@ def _build_chunk_job_failure_exception(
         )
 
 
+def _wait_for_chunk_failure_metadata(rq_job: rq.job.Job) -> RQMetaWithFailureInfo:
+    """
+    Refresh failure metadata after RQ marks a job FAILED.
+
+    Normally ``on_failure`` persists ``exc_type``/``exc_args`` before FAILED is
+    published. If a reader still observes FAILED without that metadata (or for
+    jobs that only get metadata from the global exception handler), retry for a
+    short bounded interval before falling back.
+    https://github.com/cvat-ai/cvat/issues/11147
+    """
+    interval = settings.CVAT_CHUNK_CREATE_CHECK_INTERVAL
+    attempts = max(1, int(settings.CVAT_CHUNK_FAILURE_META_TIMEOUT / interval) or 1)
+
+    job_meta = RQMetaWithFailureInfo.for_job(rq_job)
+    for attempt in range(attempts):
+        rq_job.refresh()
+        job_meta = RQMetaWithFailureInfo.for_job(rq_job)
+        if job_meta.exc_type is not None:
+            return job_meta
+
+        if attempt + 1 < attempts:
+            time.sleep(interval)
+
+    slogger.glob.warning(
+        "Chunk job %s failed without CVAT failure metadata after %.1fs; "
+        "falling back to a generic error. meta=%r exc_info=%r",
+        rq_job.id,
+        settings.CVAT_CHUNK_FAILURE_META_TIMEOUT,
+        getattr(rq_job, "meta", None),
+        getattr(rq_job, "exc_info", None),
+    )
+    return job_meta
+
+
 def chunk_failure_callback(rq_job, connection, exc_type, exc_value, tb):
     # RQ runs this before publishing FAILED, so readers can reconstruct the exception.
     save_job_failure_metadata(rq_job, exc_type, exc_value)
@@ -135,8 +169,7 @@ def wait_for_rq_job(rq_job: rq.job.Job):
         if job_status in ("finished",):
             return
         elif job_status in ("failed",):
-            rq_job.get_meta()  # refresh from Redis
-            job_meta = RQMetaWithFailureInfo.for_job(rq_job)
+            job_meta = _wait_for_chunk_failure_metadata(rq_job)
             raise _build_chunk_job_failure_exception(rq_job, job_meta)
 
         time.sleep(settings.CVAT_CHUNK_CREATE_CHECK_INTERVAL)

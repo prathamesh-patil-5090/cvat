@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 from django.conf import settings
+from django.test import override_settings
 from fakeredis import FakeRedis
 from rest_framework.exceptions import NotFound
 from rq import Queue, Retry, SimpleWorker
@@ -17,7 +18,7 @@ from cvat.apps.engine.cache import (
     enqueue_create_chunk_job,
     wait_for_rq_job,
 )
-from cvat.apps.engine.rq import BaseRQMeta, save_job_failure_metadata
+from cvat.apps.engine.rq import BaseRQMeta, RQJobMetaField, save_job_failure_metadata
 from cvat.apps.engine.views import rq_exception_handler
 from cvat.apps.redis_handler.serializers import RequestSerializer
 from cvat.apps.redis_handler.utils import send_request_failed_signal
@@ -47,11 +48,44 @@ class TestChunkFailureMetadata(unittest.TestCase):
             self.assertFalse(worker.perform_job(job, queue))
         handler.assert_called_once()
 
+    @override_settings(CVAT_CHUNK_FAILURE_META_TIMEOUT=0.4, CVAT_CHUNK_CREATE_CHECK_INTERVAL=0.2)
     def test_failure_without_metadata_uses_fallback(self):
-        job = mock.Mock(meta={})
+        job = mock.Mock(meta={}, id="job-without-meta", exc_info=None)
         job.get_status.return_value = "failed"
-        with self.assertRaisesRegex(ChunkCreationError, "Cannot create chunk"):
+        with (
+            mock.patch("cvat.apps.engine.cache.time.sleep") as sleep,
+            self.assertRaisesRegex(ChunkCreationError, "Cannot create chunk"),
+        ):
             wait_for_rq_job(job)
+        # Wait briefly for metadata that never arrives, then fall back.
+        self.assertGreaterEqual(sleep.call_count, 1)
+        job.refresh.assert_called()
+
+    @override_settings(CVAT_CHUNK_FAILURE_META_TIMEOUT=0.4, CVAT_CHUNK_CREATE_CHECK_INTERVAL=0.2)
+    def test_failure_waits_for_metadata_appearing_after_failed_status(self):
+        # Regression for https://github.com/cvat-ai/cvat/issues/11147:
+        # FAILED can become visible one poll before exc_type/exc_args are saved.
+        job = mock.Mock(id="job-race", exc_info=None)
+        job.get_status.return_value = "failed"
+        job.meta = {}
+        refresh_calls = {"n": 0}
+
+        def refresh_side_effect():
+            refresh_calls["n"] += 1
+            if refresh_calls["n"] >= 2:
+                job.meta = {
+                    RQJobMetaField.EXCEPTION_TYPE: NotFound,
+                    RQJobMetaField.EXCEPTION_ARGS: ("Cloud image is missing",),
+                }
+
+        job.refresh.side_effect = refresh_side_effect
+
+        with mock.patch("cvat.apps.engine.cache.time.sleep"):
+            with self.assertRaises(NotFound) as caught:
+                wait_for_rq_job(job)
+
+        self.assertEqual(str(caught.exception.detail), "Cloud image is missing")
+        self.assertGreaterEqual(job.refresh.call_count, 2)
 
 
 def failing_request():

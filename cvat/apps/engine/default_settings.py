@@ -38,6 +38,13 @@ CVAT_CHUNK_CREATE_CHECK_INTERVAL = 0.2
 """
 Sets the frequency of checking the readiness of the chunk
 """
+
+CVAT_CHUNK_FAILURE_META_TIMEOUT = 1.0
+"""
+After an RQ chunk job becomes FAILED, wait up to this many seconds for
+CVAT failure metadata (exc_type/exc_args) before falling back to a generic error.
+"""
+
 default_export_cache_ttl = 60 * 60 * 24
 default_export_cache_lock_ttl = 30
 default_export_cache_lock_acquisition_timeout = 50
